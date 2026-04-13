@@ -24,4 +24,8 @@ public class Result<T> {
     public static <T> Result<T> fail(String msg) {
         return new Result<>(400, msg, null);
     }
+
+    public static <T> Result<T> fail(Integer code, String msg) {
+        return new Result<>(code, msg, null);
+    }
 }

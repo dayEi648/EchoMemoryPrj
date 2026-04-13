@@ -11,16 +11,15 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class PageData {
+public class PageDataVo {
 
     private long total;
     private List records;
-
-    public static <T> PageData from(IPage<T> page) {
+    public static <T> PageDataVo from(IPage<T> page) {
         if (page == null) {
-            return new PageData(0L, Collections.emptyList());
+            return new PageDataVo(0L, Collections.emptyList());
         }
-        return new PageData(
+        return new PageDataVo(
                 page.getTotal(),
                 page.getRecords()
         );

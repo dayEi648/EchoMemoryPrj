@@ -1,8 +1,11 @@
 package com.itdaie.pojo.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.itdaie.common.handler.StringListTypeHandler;
+import org.apache.ibatis.type.JdbcType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,7 +19,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("\"user\"")
+@TableName(value = "\"user\"", autoResultMap = true)
 public class User {
 
     @TableId(type = IdType.AUTO)
@@ -27,7 +30,6 @@ public class User {
     private Integer role;
     private Integer gender;
     private Integer status;
-
     private Integer exp;
     /**
      * 由数据库根据经验值自动计算生成。
@@ -35,9 +37,9 @@ public class User {
     private Integer level;
     private Integer nextLevelExp;
     private Integer levelProgress;
-
     private Integer safety;
     private Boolean professional;
+    @TableField(typeHandler = StringListTypeHandler.class, jdbcType = JdbcType.ARRAY)
     private List<String> tags;
     private String avatar;
     private String city;
