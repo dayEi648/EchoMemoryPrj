@@ -11,7 +11,6 @@ public class UserPageDTO {
     private Integer role;
     private Integer status;
     private Boolean professional;
-    private Integer safety;
     /**
      * 可选排序字段，由后端白名单统一校验。
      */

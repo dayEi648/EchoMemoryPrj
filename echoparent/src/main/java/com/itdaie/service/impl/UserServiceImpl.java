@@ -3,11 +3,12 @@ package com.itdaie.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.itdaie.common.exception.UserException;
+import com.itdaie.common.exception.BusinessException;
+import com.itdaie.common.util.SortUtils;
 import com.itdaie.mapper.UserMapper;
 import com.itdaie.pojo.dto.UserDTO;
-import com.itdaie.pojo.entity.User;
 import com.itdaie.pojo.dto.UserPageDTO;
+import com.itdaie.pojo.entity.User;
 import com.itdaie.pojo.vo.PageDataVo;
 import com.itdaie.pojo.vo.UserVO;
 import com.itdaie.service.UserService;
@@ -19,7 +20,6 @@ import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -27,15 +27,9 @@ import java.util.Set;
 @Service
 public class UserServiceImpl implements UserService {
 
-    /**
-     * 前端允许使用的排序字段白名单。
-     */
     private static final Set<String> ALLOWED_SORT_FIELDS =
-            Set.of("safety", "status", "level", "create_time", "login_time");
+            Set.of("safety", "status", "level", "create_time", "login_time", "like_count");
 
-    /**
-     * 外部排序字段名与实体字段访问方法的映射关系。
-     */
     private static final Map<String, SFunction<User, ?>> SORT_FIELD_MAP = buildSortFieldMap();
 
     @Autowired
@@ -45,15 +39,12 @@ public class UserServiceImpl implements UserService {
     private PasswordEncoder passwordEncoder;
 
     @Override
-    /**
-     * 执行带条件和排序的分页查询。
-     * 流程：参数标准化与校验 -> 构建查询条件 -> 应用排序 -> 执行分页查询。
-     */
     public PageDataVo pageQuery(UserPageDTO dto) {
         UserPageDTO safeDto = normalizeDto(dto);
         String sortBy = safeDto.getSortBy();
         String sortOrder = safeDto.getSortOrder();
-        validateSort(sortBy, sortOrder);
+
+        SortUtils.validateSort(sortBy, sortOrder, ALLOWED_SORT_FIELDS);
 
         Page<User> page = new Page<>(safeDto.getPageNum(), safeDto.getPageSize());
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
@@ -62,71 +53,36 @@ public class UserServiceImpl implements UserService {
                 .like(StringUtils.hasText(safeDto.getName()), User::getName, safeDto.getName())
                 .eq(safeDto.getRole() != null, User::getRole, safeDto.getRole())
                 .eq(safeDto.getStatus() != null, User::getStatus, safeDto.getStatus())
-                .eq(safeDto.getProfessional() != null, User::getProfessional, safeDto.getProfessional())
-                .eq(safeDto.getSafety() != null, User::getSafety, safeDto.getSafety());
+                .eq(safeDto.getProfessional() != null, User::getProfessional, safeDto.getProfessional());
 
-        // 数据库会先执行排序，再执行分页截取，保证分页顺序一致。
-        buildSort(sortBy, sortOrder, wrapper);
+        SortUtils.buildSort(sortBy, sortOrder, wrapper, SORT_FIELD_MAP);
+
         Page<User> resultPage = userMapper.selectPage(page, wrapper);
-        return PageDataVo.from(resultPage);
+        // 转换为VO后再返回
+        List<UserVO> voList = resultPage.getRecords().stream()
+                .map(this::convertToVO)
+                .toList();
+        return new PageDataVo(resultPage.getTotal(), voList);
     }
 
-    /**
-     * 当前端传入排序字段时，动态拼接排序规则。
-     */
-    private void buildSort(String sortBy, String sortOrder, LambdaQueryWrapper<User> wrapper) {
-        if (!StringUtils.hasText(sortBy)) {
-            return;
-        }
-        boolean isAsc = "asc".equals(sortOrder);
-        wrapper.orderBy(true, isAsc, SORT_FIELD_MAP.get(sortBy));
-    }
-
-    /**
-     * 校验排序字段和方向，避免非法语句与注入风险。
-     */
-    private void validateSort(String sortBy, String sortOrder) {
-        if (StringUtils.hasText(sortBy) && !ALLOWED_SORT_FIELDS.contains(sortBy)) {
-            throw new UserException("sortBy is invalid");
-        }
-        if (StringUtils.hasText(sortOrder)) {
-            String lower = sortOrder.toLowerCase(Locale.ROOT);
-            if (!"asc".equals(lower) && !"desc".equals(lower)) {
-                throw new UserException("sortOrder is invalid");
-            }
-        }
-    }
-
-    /**
-     * 校验分页必填参数，并标准化排序参数格式。
-     */
     private UserPageDTO normalizeDto(UserPageDTO dto) {
         if (dto == null) {
-            throw new UserException("request body is required");
+            throw new BusinessException("request body is required");
         }
         if (dto.getPageNum() == null || dto.getPageNum() < 1) {
-            throw new UserException("pageNum must be >= 1");
+            throw new BusinessException("pageNum must be >= 1");
         }
         if (dto.getPageSize() == null || dto.getPageSize() < 1) {
-            throw new UserException("pageSize must be >= 1");
+            throw new BusinessException("pageSize must be >= 1");
         }
         if (dto.getPageSize() > 200) {
-            throw new UserException("pageSize must be <= 200");
+            throw new BusinessException("pageSize must be <= 200");
         }
-        if (StringUtils.hasText(dto.getSortBy())) {
-            dto.setSortBy(dto.getSortBy().trim().toLowerCase(Locale.ROOT));
-        }
-        if (!StringUtils.hasText(dto.getSortOrder())) {
-            dto.setSortOrder("desc");
-        } else {
-            dto.setSortOrder(dto.getSortOrder().trim().toLowerCase(Locale.ROOT));
-        }
+        dto.setSortBy(SortUtils.normalizeSortBy(dto.getSortBy()));
+        dto.setSortOrder(SortUtils.normalizeSortOrder(dto.getSortBy(), dto.getSortOrder()));
         return dto;
     }
 
-    /**
-     * 构建排序字段映射表，用于安全的动态排序。
-     */
     private static Map<String, SFunction<User, ?>> buildSortFieldMap() {
         Map<String, SFunction<User, ?>> fieldMap = new HashMap<>();
         fieldMap.put("safety", User::getSafety);
@@ -134,17 +90,18 @@ public class UserServiceImpl implements UserService {
         fieldMap.put("level", User::getLevel);
         fieldMap.put("create_time", User::getCreateTime);
         fieldMap.put("login_time", User::getLoginTime);
+        fieldMap.put("like_count", User::getLikeCount);
         return fieldMap;
     }
 
     @Override
     public UserVO getById(Integer id) {
         if (id == null) {
-            throw new UserException("用户ID不能为空");
+            throw new BusinessException("用户ID不能为空");
         }
         User user = userMapper.selectById(id);
         if (user == null) {
-            throw new UserException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
         return convertToVO(user);
     }
@@ -162,18 +119,22 @@ public class UserServiceImpl implements UserService {
         user.setRole(dto.getRole());
         user.setGender(dto.getGender());
         user.setStatus(dto.getStatus());
+        user.setSafety(dto.getSafety());
+        user.setIsDeleted(dto.getIsDeleted());
         if (dto.getExp() != null) {
             validateExp(dto.getExp());
             user.setExp(dto.getExp());
         }
-        user.setAvatar(dto.getAvatar());
         user.setCity(dto.getCity());
-        user.setDescription(dto.getDescription());
         user.setBirth(dto.getBirth());
-        user.setTags(dto.getTags());
+        user.setDescription(dto.getDescription());
         user.setProfessional(dto.getProfessional());
-
-        // id、level、safety、createTime、updateTime由数据库自动管理
+        user.setEmoTags(dto.getEmoTags());
+        user.setInterestTags(dto.getInterestTags());
+        user.setFanIds(dto.getFanIds());
+        user.setFollowIds(dto.getFollowIds());
+        user.setSongIds(dto.getSongIds());
+        user.setAvatar(dto.getAvatar());
 
         userMapper.insert(user);
     }
@@ -186,7 +147,7 @@ public class UserServiceImpl implements UserService {
         Integer id = dto.getId();
         User existingUser = userMapper.selectById(id);
         if (existingUser == null) {
-            throw new UserException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         checkUsernameUniqueForUpdate(id, existingUser.getUsername(), dto.getUsername());
@@ -196,7 +157,6 @@ public class UserServiceImpl implements UserService {
         if (StringUtils.hasText(dto.getUsername())) {
             user.setUsername(dto.getUsername());
         }
-        // 传入密码则更新，不传则保持原密码不变
         if (StringUtils.hasText(dto.getPassword())) {
             user.setPassword(passwordEncoder.encode(dto.getPassword()));
         }
@@ -212,30 +172,46 @@ public class UserServiceImpl implements UserService {
         if (dto.getStatus() != null) {
             user.setStatus(dto.getStatus());
         }
+        if (dto.getSafety() != null) {
+            user.setSafety(dto.getSafety());
+        }
+        if (dto.getIsDeleted() != null) {
+            user.setIsDeleted(dto.getIsDeleted());
+        }
         if (dto.getExp() != null) {
             validateExp(dto.getExp());
             user.setExp(dto.getExp());
         }
-        if (StringUtils.hasText(dto.getAvatar())) {
-            user.setAvatar(dto.getAvatar());
-        }
         if (StringUtils.hasText(dto.getCity())) {
             user.setCity(dto.getCity());
-        }
-        if (StringUtils.hasText(dto.getDescription())) {
-            user.setDescription(dto.getDescription());
         }
         if (dto.getBirth() != null) {
             user.setBirth(dto.getBirth());
         }
-        if (dto.getTags() != null) {
-            user.setTags(dto.getTags());
+        if (StringUtils.hasText(dto.getDescription())) {
+            user.setDescription(dto.getDescription());
         }
         if (dto.getProfessional() != null) {
             user.setProfessional(dto.getProfessional());
         }
-
-        // updateTime由数据库触发器自动更新
+        if (dto.getEmoTags() != null) {
+            user.setEmoTags(dto.getEmoTags());
+        }
+        if (dto.getInterestTags() != null) {
+            user.setInterestTags(dto.getInterestTags());
+        }
+        if (dto.getFanIds() != null) {
+            user.setFanIds(dto.getFanIds());
+        }
+        if (dto.getFollowIds() != null) {
+            user.setFollowIds(dto.getFollowIds());
+        }
+        if (dto.getSongIds() != null) {
+            user.setSongIds(dto.getSongIds());
+        }
+        if (StringUtils.hasText(dto.getAvatar())) {
+            user.setAvatar(dto.getAvatar());
+        }
 
         userMapper.updateById(user);
     }
@@ -244,7 +220,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deleteByIds(List<Integer> ids) {
         if (ids == null || ids.isEmpty()) {
-            throw new UserException("删除ID列表不能为空");
+            throw new BusinessException("删除ID列表不能为空");
         }
         List<Integer> validIds = ids.stream()
                 .filter(Objects::nonNull)
@@ -252,61 +228,58 @@ public class UserServiceImpl implements UserService {
                 .distinct()
                 .toList();
         if (validIds.isEmpty()) {
-            throw new UserException("删除ID列表不能为空");
+            throw new BusinessException("删除ID列表不能为空");
         }
+
+        // 检查每个用户是否有关联的歌曲（通过 song_ids 数组）
+        for (Integer userId : validIds) {
+            User user = userMapper.selectById(userId);
+            if (user == null) {
+                continue; // 用户不存在，跳过
+            }
+            if (user.getSongIds() != null && !user.getSongIds().isEmpty()) {
+                throw new BusinessException(
+                        String.format("用户 %s 有关联的发行歌曲，无法删除", user.getName()));
+            }
+        }
+
         userMapper.deleteByIds(validIds);
     }
 
-    /**
-     * 校验新增用户DTO。
-     */
     private void validateAddDTO(UserDTO dto) {
         if (dto == null) {
-            throw new UserException("用户信息不能为空");
+            throw new BusinessException("用户信息不能为空");
         }
         if (!StringUtils.hasText(dto.getUsername())) {
-            throw new UserException("用户名不能为空");
+            throw new BusinessException("用户名不能为空");
         }
         if (!StringUtils.hasText(dto.getPassword())) {
-            throw new UserException("密码不能为空");
+            throw new BusinessException("密码不能为空");
         }
     }
 
-    /**
-     * 校验编辑用户DTO。
-     */
     private void validateUpdateDTO(UserDTO dto) {
         if (dto == null) {
-            throw new UserException("用户信息不能为空");
+            throw new BusinessException("用户信息不能为空");
         }
         if (dto.getId() == null) {
-            throw new UserException("用户ID不能为空");
+            throw new BusinessException("用户ID不能为空");
         }
     }
 
-    /**
-     * 校验经验值合法性。
-     */
     private void validateExp(Integer exp) {
         if (exp < 0) {
-            throw new UserException("exp must be >= 0");
+            throw new BusinessException("exp must be >= 0");
         }
     }
 
-    /**
-     * 校验新增用户名唯一性。
-     */
     private void checkUsernameUniqueForAdd(String username) {
         if (userMapper.exists(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, username))) {
-            throw new UserException("用户名已存在");
+            throw new BusinessException("用户名已存在");
         }
     }
 
-    /**
-     * 校验编辑用户名唯一性。
-     * 规则：仅当新旧用户名原始字符串不一致时才做占用校验。
-     */
     private void checkUsernameUniqueForUpdate(Integer id, String existingUsername, String newUsername) {
         if (!StringUtils.hasText(newUsername)) {
             return;
@@ -317,13 +290,10 @@ public class UserServiceImpl implements UserService {
         if (userMapper.exists(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, newUsername)
                 .ne(User::getId, id))) {
-            throw new UserException("用户名已存在");
+            throw new BusinessException("用户名已存在");
         }
     }
 
-    /**
-     * 将User实体转换为UserVO。
-     */
     private UserVO convertToVO(User user) {
         UserVO vo = new UserVO();
         vo.setId(user.getId());
@@ -332,17 +302,27 @@ public class UserServiceImpl implements UserService {
         vo.setRole(user.getRole());
         vo.setGender(user.getGender());
         vo.setStatus(user.getStatus());
+        vo.setSafety(user.getSafety());
+        vo.setIsDeleted(user.getIsDeleted());
         vo.setExp(user.getExp());
         vo.setLevel(user.getLevel());
         vo.setNextLevelExp(user.getNextLevelExp());
         vo.setLevelProgress(user.getLevelProgress());
-        vo.setSafety(user.getSafety());
-        vo.setProfessional(user.getProfessional());
-        vo.setTags(user.getTags());
-        vo.setAvatar(user.getAvatar());
         vo.setCity(user.getCity());
-        vo.setDescription(user.getDescription());
         vo.setBirth(user.getBirth());
+        vo.setDescription(user.getDescription());
+        vo.setProfessional(user.getProfessional());
+        vo.setEmoTags(user.getEmoTags());
+        vo.setInterestTags(user.getInterestTags());
+        vo.setFanIds(user.getFanIds());
+        vo.setFollowIds(user.getFollowIds());
+        vo.setSongIds(user.getSongIds());
+        // 从数组长度计算统计数字
+        vo.setFanCount(user.getFanIds() != null ? user.getFanIds().size() : 0);
+        vo.setFollowCount(user.getFollowIds() != null ? user.getFollowIds().size() : 0);
+        vo.setSongCount(user.getSongIds() != null ? user.getSongIds().size() : 0);
+        vo.setLikeCount(user.getLikeCount());
+        vo.setAvatar(user.getAvatar());
         vo.setLoginTime(user.getLoginTime());
         vo.setUpdateTime(user.getUpdateTime());
         vo.setCreateTime(user.getCreateTime());
