@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itdaie.mapper.PlayHistoryMapper">
+
+    <!-- 根据用户ID查询全部播放历史（已有接口，保持兼容性） -->
+    <select id="selectByUserId" resultType="com.itdaie.pojo.vo.PlayHistoryVO">
+        SELECT
+            ph.id,
+            ph.user_id AS userId,
+            ph.song_id AS songId,
+            ph.played_at AS playedAt,
+            m.music_name AS musicName,
+            m.image1_url AS coverUrl,
+            m.file_url AS fileUrl
+        FROM play_history ph
+        LEFT JOIN musics m ON ph.song_id = m.id
+        WHERE ph.user_id = #{userId}
+        ORDER BY ph.played_at DESC
+    </select>
+
+    <!-- 结果映射：为 PostgreSQL integer[] 指定 TypeHandler -->
+    <resultMap id="PlayHistoryVOResultMap" type="com.itdaie.pojo.vo.PlayHistoryVO">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="song_id" property="songId"/>
+        <result column="played_at" property="playedAt"/>
+        <result column="music_name" property="musicName"/>
+        <result column="image1_url" property="coverUrl"/>
+        <result column="file_url" property="fileUrl"/>
+        <result column="album_id" property="albumId"/>
+        <result column="author_ids" property="authorIds"
+                typeHandler="com.itdaie.common.handler.IntegerListTypeHandler"
+                jdbcType="ARRAY"/>
+        <result column="album_name" property="albumName"/>
+    </resultMap>
+
+    <!-- 根据用户ID查询播放历史中所有歌曲ID -->
+    <select id="selectSongIdsByUserId" resultType="java.lang.Integer">
+        SELECT song_id
+        FROM play_history
+        WHERE user_id = #{userId}
+        ORDER BY played_at DESC
+    </select>
+
+    <!-- 根据用户ID分页查询播放历史 -->
+    <select id="selectByUserIdPage" resultMap="PlayHistoryVOResultMap">
+        SELECT
+            ph.id,
+            ph.user_id,
+            ph.song_id,
+            ph.played_at,
+            m.music_name,
+            m.image1_url,
+            m.file_url,
+            m.album_id,
+            m.author_ids,
+            a.album_name
+        FROM play_history ph
+        LEFT JOIN musics m ON ph.song_id = m.id
+        LEFT JOIN albums a ON m.album_id = a.id
+        WHERE ph.user_id = #{userId}
+        ORDER BY ph.played_at DESC
+    </select>
+
+</mapper>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itdaie.mapper.DailyStatsMapper">
+
+    <insert id="upsertIncrementPlayCount">
+        INSERT INTO daily_stats (target_type, target_id, stat_date, daily_play_count, daily_collect_count, daily_comment_count)
+        VALUES (#{targetType}, #{targetId}, #{statDate}, 1, 0, 0)
+        ON CONFLICT (target_type, target_id, stat_date) DO UPDATE SET
+            daily_play_count = daily_stats.daily_play_count + 1
+    </insert>
+
+    <insert id="upsertIncrementCollectCount">
+        INSERT INTO daily_stats (target_type, target_id, stat_date, daily_play_count, daily_collect_count, daily_comment_count)
+        VALUES (#{targetType}, #{targetId}, #{statDate}, 0, 1, 0)
+        ON CONFLICT (target_type, target_id, stat_date) DO UPDATE SET
+            daily_collect_count = daily_stats.daily_collect_count + 1
+    </insert>
+
+    <update id="decrementCollectCount">
+        UPDATE daily_stats
+        SET daily_collect_count = GREATEST(0, daily_collect_count - 1)
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND stat_date = #{statDate}
+    </update>
+
+    <insert id="upsertIncrementCommentCount">
+        INSERT INTO daily_stats (target_type, target_id, stat_date, daily_play_count, daily_collect_count, daily_comment_count)
+        VALUES (#{targetType}, #{targetId}, #{statDate}, 0, 0, 1)
+        ON CONFLICT (target_type, target_id, stat_date) DO UPDATE SET
+            daily_comment_count = daily_stats.daily_comment_count + 1
+    </insert>
+
+    <insert id="batchInsertTodayRecords">
+        INSERT INTO daily_stats (target_type, target_id, stat_date, daily_play_count, daily_collect_count, daily_comment_count)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.targetType}, #{item.targetId}, #{item.statDate}, 0, 0, 0)
+        </foreach>
+        ON CONFLICT (target_type, target_id, stat_date) DO NOTHING
+    </insert>
+
+</mapper>

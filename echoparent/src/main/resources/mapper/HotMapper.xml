@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itdaie.mapper.HotMapper">
+
+    <insert id="batchUpsert">
+        INSERT INTO hot (target_type, target_id, prev_hot_score, play_count_24h, collect_count_24h,
+                         comment_count_24h, play_count_7d, collect_count_7d, comment_count_7d, hot_score)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.targetType}, #{item.targetId}, #{item.prevHotScore}, #{item.playCount24h},
+             #{item.collectCount24h}, #{item.commentCount24h}, #{item.playCount7d},
+             #{item.collectCount7d}, #{item.commentCount7d}, #{item.hotScore})
+        </foreach>
+        ON CONFLICT (target_type, target_id) DO UPDATE SET
+            prev_hot_score = EXCLUDED.prev_hot_score,
+            play_count_24h = EXCLUDED.play_count_24h,
+            collect_count_24h = EXCLUDED.collect_count_24h,
+            comment_count_24h = EXCLUDED.comment_count_24h,
+            play_count_7d = EXCLUDED.play_count_7d,
+            collect_count_7d = EXCLUDED.collect_count_7d,
+            comment_count_7d = EXCLUDED.comment_count_7d,
+            hot_score = EXCLUDED.hot_score
+    </insert>
+
+</mapper>
