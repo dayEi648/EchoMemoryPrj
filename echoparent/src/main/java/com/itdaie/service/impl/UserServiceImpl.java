@@ -658,7 +658,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserVO updateProfile(Integer userId, UserDTO dto, MultipartFile avatarFile) {
+    public UserVO updateProfile(Integer userId, UserDTO dto, String avatarUrl) {
         if (userId == null || userId <= 0) {
             throw new BusinessException("用户ID不能为空");
         }
@@ -670,8 +670,7 @@ public class UserServiceImpl implements UserService {
         User user = new User();
         user.setId(userId);
 
-        if (avatarFile != null && !avatarFile.isEmpty()) {
-            String avatarUrl = ossUtil.upload(avatarFile, OssFolder.AVATAR);
+        if (StringUtils.hasText(avatarUrl)) {
             ossUtil.deleteByPublicUrlIfReplaced(existingUser.getAvatar(), avatarUrl);
             user.setAvatar(avatarUrl);
         }

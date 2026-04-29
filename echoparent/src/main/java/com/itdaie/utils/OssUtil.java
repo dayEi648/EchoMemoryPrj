@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.net.URI;
 import java.util.Objects;
 import java.util.UUID;
@@ -32,6 +33,24 @@ public class OssUtil {
      * @return 文件访问 URL
      */
     public String upload(MultipartFile file, String folderPrefix) {
+        try {
+            String originalFilename = file.getOriginalFilename();
+            String suffix = originalFilename.substring(originalFilename.lastIndexOf("."));
+            return upload(file.getInputStream(), folderPrefix, suffix);
+        } catch (Exception e) {
+            throw new FileUploadException("文件上传失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 使用指定输入流上传文件到 OSS。
+     *
+     * @param inputStream  文件输入流
+     * @param folderPrefix 目录前缀
+     * @param suffix       文件后缀（如 {@code .jpg}）
+     * @return 文件访问 URL
+     */
+    public String upload(InputStream inputStream, String folderPrefix, String suffix) {
         if (!hasOssCredentials()) {
             throw new FileUploadException(
                     "未配置阿里云 OSS：请在配置中设置 aliyun.oss（endpoint、bucket-name、access-key-id、access-key-secret）"
@@ -45,10 +64,8 @@ public class OssUtil {
                 ossConfig.getAccessKeySecret()
         );
         try {
-            String originalFilename = file.getOriginalFilename();
-            String suffix = originalFilename.substring(originalFilename.lastIndexOf("."));
             String objectName = prefix + UUID.randomUUID() + suffix;
-            ossClient.putObject(ossConfig.getBucketName(), objectName, file.getInputStream());
+            ossClient.putObject(ossConfig.getBucketName(), objectName, inputStream);
             return "https://" + ossConfig.getBucketName() + "." + endpointHost() + "/" + objectName;
         } catch (Exception e) {
             throw new FileUploadException("文件上传失败: " + e.getMessage());

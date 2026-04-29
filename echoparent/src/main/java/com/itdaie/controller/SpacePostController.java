@@ -7,12 +7,16 @@ import com.itdaie.pojo.dto.SpacePostForwardDTO;
 import com.itdaie.pojo.dto.SpacePostPageDTO;
 import com.itdaie.pojo.vo.PageDataVo;
 import com.itdaie.service.SpacePostService;
+import com.itdaie.utils.ImageProcessUtil;
 import com.itdaie.utils.OssUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 /**
  * 空间说说控制器
@@ -98,8 +102,16 @@ public class SpacePostController {
         if (file == null || file.isEmpty()) {
             return Result.fail("请选择图片文件");
         }
-        String url = ossUtil.upload(file, OssFolder.SPACE_POST_IMAGE);
-        return Result.success(url);
+        if (!ImageProcessUtil.isImage(file)) {
+            return Result.fail("请上传图片文件");
+        }
+        try {
+            InputStream is = ImageProcessUtil.compress(file, 1920, 1080, 0.85f);
+            String url = ossUtil.upload(is, OssFolder.SPACE_POST_IMAGE, ".jpg");
+            return Result.success(url);
+        } catch (IOException e) {
+            return Result.fail("图片处理失败: " + e.getMessage());
+        }
     }
 
     /**

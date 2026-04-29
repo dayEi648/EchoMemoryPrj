@@ -120,7 +120,7 @@ public interface UserService {
      * @return 更新后的用户视图对象
      * @throws com.itdaie.common.exception.BusinessException 用户不存在时抛出
      */
-    UserVO updateProfile(Integer userId, UserDTO dto, MultipartFile avatarFile);
+    UserVO updateProfile(Integer userId, UserDTO dto, String avatarUrl);
 
     /**
      * 查询当前用户收藏的歌单列表。

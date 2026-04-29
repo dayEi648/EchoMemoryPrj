@@ -10,11 +10,15 @@ import com.itdaie.pojo.vo.PageDataVo;
 import com.itdaie.pojo.vo.PlaylistVO;
 import com.itdaie.pojo.vo.UserVO;
 import com.itdaie.service.UserService;
+import com.itdaie.utils.ImageProcessUtil;
 import com.itdaie.utils.OssUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 import java.util.List;
 
@@ -44,7 +48,7 @@ public class UserController {
     public Result<Void> add(@ModelAttribute UserDTO dto,
                             @RequestParam(value = "avatarFile", required = false) MultipartFile avatarFile) {
         if (avatarFile != null && !avatarFile.isEmpty()) {
-            dto.setAvatar(ossUtil.upload(avatarFile, OssFolder.AVATAR));
+            dto.setAvatar(uploadAvatar(avatarFile));
         }
         userService.add(dto);
         return Result.success("新增成功", null);
@@ -54,7 +58,7 @@ public class UserController {
     public Result<Void> update(@ModelAttribute UserDTO dto,
                                @RequestParam(value = "avatarFile", required = false) MultipartFile avatarFile) {
         if (avatarFile != null && !avatarFile.isEmpty()) {
-            dto.setAvatar(ossUtil.upload(avatarFile, OssFolder.AVATAR));
+            dto.setAvatar(uploadAvatar(avatarFile));
         }
         userService.update(dto);
         return Result.success("修改成功", null);
@@ -112,9 +116,17 @@ public class UserController {
     @PutMapping("/profile")
     public Result<UserVO> updateProfile(@ModelAttribute UserDTO dto,
                                         @RequestParam(value = "avatarFile", required = false) MultipartFile avatarFile,
+                                        @RequestParam(value = "cropX", required = false) Integer cropX,
+                                        @RequestParam(value = "cropY", required = false) Integer cropY,
+                                        @RequestParam(value = "cropW", required = false) Integer cropW,
+                                        @RequestParam(value = "cropH", required = false) Integer cropH,
                                         jakarta.servlet.http.HttpServletRequest request) {
         Integer userId = (Integer) request.getAttribute("userId");
-        UserVO vo = userService.updateProfile(userId, dto, avatarFile);
+        String avatarUrl = null;
+        if (avatarFile != null && !avatarFile.isEmpty()) {
+            avatarUrl = uploadAvatar(avatarFile, cropX, cropY, cropW, cropH);
+        }
+        UserVO vo = userService.updateProfile(userId, dto, avatarUrl);
         return Result.success("资料更新成功", vo);
     }
 
@@ -250,4 +262,24 @@ public class UserController {
         return Result.success(userService.getFansPage(userId, pageNum, pageSize));
     }
 
+    private String uploadAvatar(MultipartFile file) {
+        return uploadAvatar(file, null, null, null, null);
+    }
+
+    private String uploadAvatar(MultipartFile file, Integer cropX, Integer cropY, Integer cropW, Integer cropH) {
+        if (!ImageProcessUtil.isImage(file)) {
+            throw new com.itdaie.common.exception.FileUploadException("请上传图片文件");
+        }
+        try {
+            InputStream is;
+            if (cropX != null && cropY != null && cropW != null && cropH != null && cropW > 0 && cropH > 0) {
+                is = ImageProcessUtil.cropAndCompress(file, cropX, cropY, cropW, cropH, 400, 400, 0.90f);
+            } else {
+                is = ImageProcessUtil.cropToSquareAndCompress(file, 400, 0.90f);
+            }
+            return ossUtil.upload(is, OssFolder.AVATAR, ".jpg");
+        } catch (Exception e) {
+            throw new com.itdaie.common.exception.FileUploadException("头像处理失败: " + e.getMessage());
+        }
+    }
 }

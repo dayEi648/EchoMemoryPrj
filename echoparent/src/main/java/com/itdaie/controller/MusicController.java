@@ -9,12 +9,14 @@ import com.itdaie.pojo.vo.PageDataVo;
 import com.itdaie.mapper.MusicMapper;
 import com.itdaie.pojo.entity.Music;
 import com.itdaie.service.MusicService;
+import com.itdaie.utils.ImageProcessUtil;
 import com.itdaie.utils.OssUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -63,13 +65,13 @@ public class MusicController {
             dto.setLyricsUrl(ossUtil.upload(lyricsFile, OssFolder.MUSIC_LYRICS));
         }
         if (image1File != null && !image1File.isEmpty()) {
-            dto.setImage1Url(ossUtil.upload(image1File, OssFolder.MUSIC_IMAGE));
+            dto.setImage1Url(uploadCompressedImage(image1File));
         }
         if (image2File != null && !image2File.isEmpty()) {
-            dto.setImage2Url(ossUtil.upload(image2File, OssFolder.MUSIC_IMAGE));
+            dto.setImage2Url(uploadCompressedImage(image2File));
         }
         if (image3File != null && !image3File.isEmpty()) {
-            dto.setImage3Url(ossUtil.upload(image3File, OssFolder.MUSIC_IMAGE));
+            dto.setImage3Url(uploadCompressedImage(image3File));
         }
         musicService.add(dto);
         return Result.success("新增成功", null);
@@ -89,13 +91,13 @@ public class MusicController {
             dto.setLyricsUrl(ossUtil.upload(lyricsFile, OssFolder.MUSIC_LYRICS));
         }
         if (image1File != null && !image1File.isEmpty()) {
-            dto.setImage1Url(ossUtil.upload(image1File, OssFolder.MUSIC_IMAGE));
+            dto.setImage1Url(uploadCompressedImage(image1File));
         }
         if (image2File != null && !image2File.isEmpty()) {
-            dto.setImage2Url(ossUtil.upload(image2File, OssFolder.MUSIC_IMAGE));
+            dto.setImage2Url(uploadCompressedImage(image2File));
         }
         if (image3File != null && !image3File.isEmpty()) {
-            dto.setImage3Url(ossUtil.upload(image3File, OssFolder.MUSIC_IMAGE));
+            dto.setImage3Url(uploadCompressedImage(image3File));
         }
         musicService.update(dto);
         return Result.success("修改成功", null);
@@ -231,5 +233,17 @@ public class MusicController {
         vo.setCreateTime(music.getCreateTime());
         vo.setUpdateTime(music.getUpdateTime());
         return vo;
+    }
+
+    private String uploadCompressedImage(MultipartFile file) {
+        if (!ImageProcessUtil.isImage(file)) {
+            throw new com.itdaie.common.exception.FileUploadException("请上传图片文件");
+        }
+        try {
+            InputStream is = ImageProcessUtil.compress(file, 1920, 1080, 0.85f);
+            return ossUtil.upload(is, OssFolder.MUSIC_IMAGE, ".jpg");
+        } catch (Exception e) {
+            throw new com.itdaie.common.exception.FileUploadException("图片处理失败: " + e.getMessage());
+        }
     }
 }

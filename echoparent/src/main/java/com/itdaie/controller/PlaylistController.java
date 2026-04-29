@@ -10,6 +10,7 @@ import com.itdaie.pojo.entity.Playlist;
 import com.itdaie.pojo.vo.PageDataVo;
 import com.itdaie.pojo.vo.PlaylistVO;
 import com.itdaie.service.PlaylistService;
+import com.itdaie.utils.ImageProcessUtil;
 import com.itdaie.utils.OssUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -120,8 +123,16 @@ public class PlaylistController {
      */
     @PostMapping("/cover")
     public Result<String> uploadCover(@RequestParam("file") MultipartFile file) {
-        String url = ossUtil.upload(file, OssFolder.PLAYLIST_IMAGE);
-        return Result.success(url);
+        if (!ImageProcessUtil.isImage(file)) {
+            return Result.fail("请上传图片文件");
+        }
+        try {
+            InputStream is = ImageProcessUtil.compress(file, 1200, 1200, 0.85f);
+            String url = ossUtil.upload(is, OssFolder.PLAYLIST_IMAGE, ".jpg");
+            return Result.success(url);
+        } catch (IOException e) {
+            return Result.fail("图片处理失败: " + e.getMessage());
+        }
     }
 
     /**
